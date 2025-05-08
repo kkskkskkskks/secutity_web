@@ -47,71 +47,54 @@
   <div class="slider-container">
     <button class="prev-btn" disabled>&#10094;</button>
     <div class="products-slider" id="productsSlider">
-      <!-- JS will inject product slides here -->
+      {% for product in products %}
+      <div class="slide-item">
+        <a href="{{ url_for('product_bp.product_detail', product_id=product['id']) }}">
+          <img src="{{ url_for('static', filename=product['image_path']) }}" alt="{{ product['name'] }}" class="product-image">
+          <p>{{ product['name'] }}</p>
+          <p class="price">{{ product['price'] }}&#x20a9;</p>
+        </a>
+      </div>
+      {% endfor %}
     </div>
     <button class="next-btn">&#10095;</button>
   </div>
 
   <script>
-    const API_BASE = 'http://<BE_VM_IP>:8000';
-
-    async function fetchProducts() {
-      const res = await fetch(`${API_BASE}/api/products`);
-      if (!res.ok) throw new Error('Failed to load products');
-      return res.json();
-    }
-
-    function renderProducts(products) {
-      const slider = document.getElementById('productsSlider');
-      slider.innerHTML = '';
-      products.forEach(prod => {
-        const item = document.createElement('div');
-        item.className = 'slide-item';
-        item.innerHTML = `
-          <a href="${API_BASE}/product/${prod.id}">
-            <img src="static/${prod.image_path}" alt="${prod.name}" class="product-image">
-            <p>${prod.name}</p>
-            <p class="price">${prod.price}₩</p>
-          </a>`;
-        slider.appendChild(item);
-      });
-    }
-
-    // Reuse existing slider controls
+    const sliderWrapper = document.getElementById('productsSlider');
     const prevBtn = document.querySelector('.prev-btn');
     const nextBtn = document.querySelector('.next-btn');
+    const slideItems = sliderWrapper.querySelectorAll('.slide-item');
+
+    const itemsPerView = 4;
+    const totalItems = slideItems.length;
+    const totalSlides = Math.ceil(totalItems / itemsPerView);
+    let currentSlide = 0;
 
     function updateSliderPosition() {
-      const sliderWrapper = document.getElementById('productsSlider');
-      const slideItems = sliderWrapper.querySelectorAll('.slide-item');
-      const itemsPerView = 4;
-      const totalItems = slideItems.length;
-      const totalSlides = Math.ceil(totalItems / itemsPerView);
-      let currentSlide = 0;
+      const slideWidth = slideItems[0].offsetWidth;
+      sliderWrapper.style.transform = `translateX(-${currentSlide * slideWidth * itemsPerView}px)`;
 
-      function moveSlide(dir) {
-        currentSlide = Math.min(Math.max(currentSlide + dir, 0), totalSlides - 1);
-        const slideWidth = slideItems[0]?.offsetWidth || 0;
-        sliderWrapper.style.transform = `translateX(-${currentSlide * slideWidth * itemsPerView}px)`;
-        prevBtn.disabled = currentSlide === 0;
-        nextBtn.disabled = currentSlide >= totalSlides - 1;
-      }
-
-      nextBtn.addEventListener('click', () => moveSlide(1));
-      prevBtn.addEventListener('click', () => moveSlide(-1));
-      moveSlide(0);
-      window.addEventListener('resize', () => moveSlide(0));
+      prevBtn.disabled = currentSlide === 0;
+      nextBtn.disabled = currentSlide >= totalSlides - 1;
     }
 
-    window.addEventListener('DOMContentLoaded', async () => {
-      try {
-        const products = await fetchProducts();
-        renderProducts(products);
+    nextBtn.addEventListener('click', () => {
+      if (currentSlide < totalSlides - 1) {
+        currentSlide++;
         updateSliderPosition();
-      } catch (e) {
-        console.error(e);
       }
     });
+
+    prevBtn.addEventListener('click', () => {
+      if (currentSlide > 0) {
+        currentSlide--;
+        updateSliderPosition();
+      }
+    });
+
+    window.addEventListener('load', updateSliderPosition);
+    window.addEventListener('resize', updateSliderPosition);
   </script>
 
   {% include 'footer.html' %}
