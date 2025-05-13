@@ -1,168 +1,32 @@
--- 1. roles 테이블
-CREATE TABLE roles (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(20) NOT NULL UNIQUE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+@auth_bp.route("/login", methods=["GET", "POST"], endpoint="login")
+def login():
+    if request.method == "POST":
+        email    = request.form["email"]
+        password = request.form["password"]
 
--- 2. users 테이블
-CREATE TABLE users (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  email VARCHAR(100) NOT NULL UNIQUE,
-  password VARCHAR(255) NOT NULL,
-  nickname VARCHAR(50),
-  phone VARCHAR(20),
-  role_id INT,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_users_roles FOREIGN KEY (role_id)
-    REFERENCES roles(id)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        conn = current_app.get_db_connection()
+        try:
+            with conn.cursor(dictionary=True) as cursor:
+                # 🔥 사용자 입력을 쿼리에 직접 삽입 → SQL Injection 취약
+                query = f"""
+                    SELECT u.id, u.nickname AS nickname, u.email,
+                           u.password, u.role_id, r.name AS role_name
+                    FROM users u
+                    JOIN roles r ON u.role_id = r.id
+                    WHERE u.email = '{email}' AND u.password = '{password}'
+                """
+                cursor.execute(query)
+                user = cursor.fetchone()
+        finally:
+            conn.close()
 
--- 3. categories 테이블
-CREATE TABLE categories (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(50) NOT NULL UNIQUE,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        if user:
+            session["user_id"]   = user["id"]
+            session["user_name"] = user["nickname"]
+            session["is_admin"]  = (user["role_name"] == "ADMIN")
+            return redirect(url_for("main_bp.index"))
 
--- 4. category_types 테이블
-CREATE TABLE category_types (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  category_id INT NOT NULL,
-  name VARCHAR(50),
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_ct_categories FOREIGN KEY (category_id)
-    REFERENCES categories(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+        flash("이메일 또는 비밀번호가 올바르지 않습니다.")
+        return redirect(url_for("auth_bp.login"))
 
--- 5. products 테이블
-CREATE TABLE products (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  category_type_id INT NOT NULL,
-  name VARCHAR(100),
-  description TEXT,
-  price DECIMAL(10,2),
-  stock_quantity INT,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_products_ct FOREIGN KEY (category_type_id)
-    REFERENCES category_types(id)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 6. product_images 테이블
-CREATE TABLE product_images (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  product_id INT NOT NULL,
-  url VARCHAR(255),
-  is_primary BOOLEAN DEFAULT FALSE,
-  CONSTRAINT fk_pi_products FOREIGN KEY (product_id)
-    REFERENCES products(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 7. product_variants 테이블
-CREATE TABLE product_variants (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  product_id INT NOT NULL,
-  size ENUM('S','M','L','XL') NOT NULL,
-  stock_quantity INT NOT NULL DEFAULT 0,
-  price DECIMAL(10,2),
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_pv_products FOREIGN KEY (product_id)
-    REFERENCES products(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 8. carts 테이블
-CREATE TABLE carts (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  product_id INT NOT NULL,
-  quantity INT,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_carts_users FOREIGN KEY (user_id)
-    REFERENCES users(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT fk_carts_products FOREIGN KEY (product_id)
-    REFERENCES products(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 9. orders 테이블
-CREATE TABLE orders (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  address VARCHAR(255),
-  payment_method VARCHAR(50),
-  total_amount DECIMAL(10,2),
-  status ENUM('PENDING','PAID','SHIPPED','DELIVERED') DEFAULT 'PENDING',
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_orders_users FOREIGN KEY (user_id)
-    REFERENCES users(id)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 10. order_items 테이블
-CREATE TABLE order_items (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  order_id INT NOT NULL,
-  product_id INT NOT NULL,
-  quantity INT,
-  unit_price DECIMAL(10,2),
-  subtotal DECIMAL(10,2),
-  CONSTRAINT fk_oi_orders FOREIGN KEY (order_id)
-    REFERENCES orders(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE,
-  CONSTRAINT fk_oi_products FOREIGN KEY (product_id)
-    REFERENCES products(id)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 11. payments 테이블
-CREATE TABLE payments (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  order_id INT NOT NULL,
-  amount DECIMAL(10,2),
-  method VARCHAR(50),
-  status ENUM('CANCELED','PENDING','COMPLETED','FAILED') DEFAULT 'PENDING',
-  transaction_id VARCHAR(100),
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT fk_payments_orders FOREIGN KEY (order_id)
-    REFERENCES orders(id)
-    ON DELETE CASCADE
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 12. inquiries 테이블
-CREATE TABLE inquiries (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  user_id INT NOT NULL,
-  type ENUM('NOTICE','FAQ','QNA'),
-  title VARCHAR(200),
-  content TEXT,
-  image_path VARCHAR(255),
-  answer TEXT,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  CONSTRAINT fk_inquiries_users FOREIGN KEY (user_id)
-    REFERENCES users(id)
-    ON DELETE SET NULL
-    ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    return render_template("login.html")
