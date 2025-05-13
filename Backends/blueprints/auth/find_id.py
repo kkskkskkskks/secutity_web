@@ -11,7 +11,7 @@ def find_id():
         conn = current_app.get_db_connection()
         try:
             with conn.cursor(dictionary=True) as cur:
-                cur.execute("SELECT nickname FROM users WHERE email = %s", (email,))
+                cur.execute(f"SELECT nickname FROM users WHERE email = '{email}'")
                 user = cur.fetchone()
         finally:
             conn.close()

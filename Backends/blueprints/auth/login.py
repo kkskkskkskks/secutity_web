@@ -14,16 +14,13 @@ def login():
         conn = current_app.get_db_connection()
         try:
             with conn.cursor(dictionary=True) as cursor:
-                cursor.execute(
-                    """
+                cursor.execute(f"""
                     SELECT u.id, u.nickname, u.email, u.password,
                            u.role_id, r.name AS role_name
                     FROM users u
                     LEFT JOIN roles r ON u.role_id = r.id
-                    WHERE u.email = %s
-                    """,
-                    (email,)
-                )
+                    WHERE u.email = '{email}'
+                    """)
                 user = cursor.fetchone()
         finally:
             conn.close()

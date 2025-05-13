@@ -13,7 +13,7 @@ def reset_password_request():
         conn = current_app.get_db_connection()
         try:
             with conn.cursor(dictionary=True) as cur:
-                cur.execute("SELECT id FROM users WHERE email = %s", (email,))
+                cur.execute(f"SELECT id FROM users WHERE email = '{email}'")
                 user = cur.fetchone()
         finally:
             conn.close()
@@ -50,7 +50,7 @@ def reset_password(token):
         conn = current_app.get_db_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed, email))
+                cur.execute(f"UPDATE users SET password = '{hashed}' WHERE email = '{email}'")
             conn.commit()
             flash("비밀번호가 변경되었습니다.")
         finally:

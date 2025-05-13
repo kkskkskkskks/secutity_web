@@ -23,10 +23,7 @@ def mypage():
             conn = current_app.get_db_connection()
             try:
                 with conn.cursor(dictionary=True) as cur:
-                    cur.execute(
-                        "SELECT password FROM users WHERE id = %s",
-                        (session["user_id"],)
-                    )
+                    cur.execute(f"SELECT password FROM users WHERE id = {session['user_id']}")
                     user_pw = cur.fetchone()["password"]
                 if not check_password_hash(user_pw, current_pw):
                     flash("현재 비밀번호가 일치하지 않습니다.")
@@ -36,10 +33,7 @@ def mypage():
                     return redirect(url_for("auth_bp.profile", tab="info"))
                 hashed = generate_password_hash(new_pw)
                 with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE users SET password = %s, updated_at = NOW() WHERE id = %s",
-                        (hashed, session["user_id"])
-                    )
+                    cur.execute(f"UPDATE users SET password = '{hashed}', updated_at = NOW() WHERE id = {session['user_id']}")
                 conn.commit()
                 flash("비밀번호가 변경되었습니다.")
             finally:
@@ -52,10 +46,7 @@ def mypage():
         conn = current_app.get_db_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE users SET nickname = %s, phone = %s, updated_at = NOW() WHERE id = %s",
-                    (nickname, phone, session["user_id"])
-                )
+                cur.execute(f"UPDATE users SET nickname = '{nickname}', phone = '{phone}', updated_at = NOW() WHERE id = {session['user_id']}")
             conn.commit()
             flash("개인정보가 업데이트되었습니다.")
         finally:
@@ -67,17 +58,17 @@ def mypage():
 
     with conn.cursor(dictionary=True) as cur:
         # 사용자 정보
-        cur.execute("""
+        cur.execute(f"""
             SELECT u.*, r.name AS role_name
             FROM users u
             JOIN roles r ON u.role_id = r.id
-            WHERE u.id = %s
-        """, (session["user_id"],))
+            WHERE u.id = {session['user_id']}
+        """)
         user = cur.fetchone()
 
         orders = []
         if tab == "orders":
-            cur.execute("""
+            cur.execute(f"""
                 SELECT
                     o.id AS order_id, o.created_at, o.total_amount, o.status,
                     o.address, p.name AS product_name, oi.quantity, oi.unit_price,
@@ -89,9 +80,9 @@ def mypage():
                 LEFT JOIN product_images pi ON p.id = pi.product_id AND pi.is_primary = 1
                 JOIN category_types ct ON p.category_type_id = ct.id
                 JOIN categories cat ON ct.category_id = cat.id
-                WHERE o.user_id = %s
+                WHERE o.user_id = {session['user_id']}
                 ORDER BY o.created_at DESC
-            """, (session["user_id"],))
+            """)
             raw_orders = cur.fetchall()
 
             # 주문 내역에 날짜별로 그룹화하기
@@ -123,10 +114,7 @@ def cancel_order(order_id):
     try:
         with conn.cursor(dictionary=True) as cur:
             # 주문이 본인의 것인지 + 상태 확인
-            cur.execute("""
-                SELECT status, user_id FROM orders
-                WHERE id = %s
-            """, (order_id,))
+            cur.execute(f"SELECT status, user_id FROM orders WHERE id = {order_id}")
             order = cur.fetchone()
 
             if not order or order["user_id"] != session["user_id"]:
@@ -138,10 +126,7 @@ def cancel_order(order_id):
                 return redirect(url_for("auth_bp.profile", tab="orders"))
 
             # 주문 상태 업데이트
-            cur.execute("""
-                UPDATE orders SET status = 'CANCELLED'
-                WHERE id = %s
-            """, (order_id,))
+            cur.execute(f"UPDATE orders SET status = 'CANCELLED' WHERE id = {order_id}")
             conn.commit()
 
             flash("주문이 취소되었습니다.")
@@ -155,7 +140,7 @@ def update_address(order_id):
     conn = current_app.get_db_connection()
     try:
         with conn.cursor(dictionary=True) as cur:
-            cur.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
+            cur.execute(f"SELECT * FROM orders WHERE id = {order_id}")
             order = cur.fetchone()
 
         # 주문이 존재하지 않거나 상태가 PENDING 또는 PAID가 아닌 경우, 접근을 막음
@@ -168,10 +153,7 @@ def update_address(order_id):
 
             # 배송지 업데이트
             with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE orders SET address = %s, updated_at = NOW() WHERE id = %s",
-                    (new_address, order_id)
-                )
+                cur.execute(f"UPDATE orders SET address = '{new_address}', updated_at = NOW() WHERE id = {order_id}")
             conn.commit()
             flash("배송지가 수정되었습니다.", 'success')
             return redirect(url_for('auth_bp.profile', tab='orders'))

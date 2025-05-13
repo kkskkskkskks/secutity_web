@@ -8,6 +8,24 @@ from werkzeug.utils import secure_filename
 import os
 from markupsafe import escape
 
+def save_image(file, entity_id):
+    from werkzeug.utils import secure_filename
+    import os
+    filename = secure_filename(file.filename)
+    ext = os.path.splitext(filename)[1]
+    save_name = f"{entity_id}{ext}"
+    upload_folder = os.path.join(current_app.root_path, os.pardir, "Fronts", "static", "inquiries_image")
+    os.makedirs(upload_folder, exist_ok=True)
+    save_path = os.path.join(upload_folder, save_name)
+    file.save(save_path)
+    return f"inquiries_image/{save_name}"
+
+def delete_image(image_path):
+    import os
+    full_path = os.path.join(current_app.root_path, os.pardir, "Fronts", "static", image_path)
+    if os.path.exists(full_path):
+        os.remove(full_path)
+
 contact_bp = Blueprint("contact_bp", __name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -19,13 +37,13 @@ def contact():
     conn = current_app.get_db_connection()
     try:
         with conn.cursor(dictionary=True) as cursor:
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT i.*, u.nickname
                 FROM inquiries i
                 JOIN users u ON i.user_id = u.id
-                WHERE i.type = %s
+                WHERE i.type = '{board_type}'
                 ORDER BY i.created_at DESC
-            """, (board_type,))
+            """)
             posts = cursor.fetchall()
     finally:
         conn.close()
@@ -86,35 +104,21 @@ def write_post():
         conn = current_app.get_db_connection()
         try:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(f"""
                     INSERT INTO inquiries (user_id, type, title, content)
-                    VALUES (%s, %s, %s, %s)
-                """, (user_id, board_type, title, content))
+                    VALUES ({user_id}, '{board_type}', '{title}', '{content}')
+                """)
                 conn.commit()
 
                 cur.execute("SELECT LAST_INSERT_ID()")
                 post_id = cur.fetchone()[0]
 
                 if file and file.filename:
-                    # 파일 이름과 확장자 처리
-                    filename = secure_filename(file.filename)
-                    ext = os.path.splitext(filename)[1]
-                    save_name = f"{post_id}{ext}"
-                    
-                    # 상대 경로로 저장 경로 설정 (Flask 앱의 root_path를 기준으로)
-                    save_path = os.path.join("C:\\Users\\user\\Desktop\\web2\\secutity_web", "Fronts", "static", "inquiries_image", save_name)
-                    print(save_path)
-                    # 디렉터리가 존재하지 않으면 생성
-                    directory = os.path.dirname(save_path)
-                    if not os.path.exists(directory):
-                        os.makedirs(directory)
-
-                    # 파일 저장
-                    file.save(save_path)
-
-                    # DB 경로 업데이트 (상대 경로)
-                    image_db_path = f"inquiries_image/{save_name}"  # DB에 저장할 상대 경로
-                    cur.execute("UPDATE inquiries SET image_path = %s WHERE id = %s", (image_db_path, post_id))
+                    image_db_path = save_image(file, post_id)
+                    cur.execute(
+                        "UPDATE inquiries SET image_path = %s WHERE id = %s",
+                        (image_db_path, post_id)
+                    )
                     conn.commit()
         finally:
             conn.close()
@@ -135,7 +139,7 @@ def edit_post(inquiry_id):
     conn = current_app.get_db_connection()
     try:
         with conn.cursor(dictionary=True) as cursor:
-            cursor.execute("SELECT * FROM inquiries WHERE id = %s", (inquiry_id,))
+            cursor.execute(f"SELECT * FROM inquiries WHERE id = {inquiry_id}")
             inquiry = cursor.fetchone()
 
             if not inquiry:
@@ -176,36 +180,18 @@ def edit_post(inquiry_id):
 
                 # 이미지 처리: 기존 이미지 삭제 후 새 이미지 저장
                 if file and file.filename:
-                    # 기존 이미지 삭제
                     if inquiry.get("image_path"):
-                        image_path = os.path.join(current_app.root_path, "static", inquiry["image_path"])
-                        if os.path.exists(image_path):
-                            os.remove(image_path)
-
-                    # 파일 이름과 확장자 처리
-                    filename = secure_filename(file.filename)
-                    ext = os.path.splitext(filename)[1]
-                    save_name = f"{inquiry_id}{ext}"
-
-                    # 상대 경로로 저장 경로 설정
-                    save_path = os.path.join(current_app.root_path, "Fronts", "static", "inquiries_image", save_name)
-
-                    # 디렉터리가 존재하지 않으면 생성
-                    directory = os.path.dirname(save_path)
-                    if not os.path.exists(directory):
-                        os.makedirs(directory)
-
-                    # 파일 저장
-                    file.save(save_path)
-
-                    # DB 경로 업데이트
-                    image_db_path = f"./static/inquiries_image/{save_name}"
-                    cursor.execute("UPDATE inquiries SET image_path = %s WHERE id = %s", (image_db_path, inquiry_id))
+                        delete_image(inquiry["image_path"])
+                    image_db_path = save_image(file, inquiry_id)
+                    cursor.execute(
+                        "UPDATE inquiries SET image_path = %s WHERE id = %s",
+                        (image_db_path, inquiry_id)
+                    )
                     conn.commit()
 
                 # 제목과 내용 업데이트
-                cursor.execute("UPDATE inquiries SET title = %s, content = %s WHERE id = %s",
-                               (title, content, inquiry_id))
+                cursor.execute(f"UPDATE inquiries SET title = '{title}', content = '{content}' WHERE id = {inquiry_id}")
+
                 conn.commit()
 
                 #flash("게시글이 수정되었습니다.")
@@ -230,7 +216,7 @@ def delete_post(inquiry_id):
     try:
         with conn.cursor(dictionary=True) as cursor:
             # 게시글 조회
-            cursor.execute("SELECT * FROM inquiries WHERE id = %s", (inquiry_id,))
+            cursor.execute(f"SELECT * FROM inquiries WHERE id = {inquiry_id}")
             inquiry = cursor.fetchone()
 
             if not inquiry:
@@ -243,7 +229,7 @@ def delete_post(inquiry_id):
                 return redirect(url_for("contact_bp.inquiry_detail", inquiry_id=inquiry_id))
 
             # 답변 삭제: 해당 문의글에 달린 답변들을 삭제
-            cursor.execute("DELETE FROM answers WHERE inquiry_id = %s", (inquiry_id,))
+            cursor.execute(f"DELETE FROM answers WHERE inquiry_id = {inquiry_id}")
             conn.commit()
 
             # 게시글에 이미지가 있으면 삭제
@@ -253,7 +239,7 @@ def delete_post(inquiry_id):
                     os.remove(image_path)
 
             # 게시글 삭제
-            cursor.execute("DELETE FROM inquiries WHERE id = %s", (inquiry_id,))
+            cursor.execute(f"DELETE FROM inquiries WHERE id = {inquiry_id}")
             conn.commit()
 
         #flash("게시글과 답변이 삭제되었습니다.")
@@ -276,21 +262,21 @@ def inquiry_detail(inquiry_id):
     try:
         with conn.cursor(dictionary=True) as cursor:
             # 문의글 조회
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT i.*, u.nickname
                 FROM inquiries i
                 JOIN users u ON i.user_id = u.id
-                WHERE i.id = %s
-            """, (inquiry_id,))
+                WHERE i.id = {inquiry_id}
+            """)
             inquiry = cursor.fetchone()
 
             # 해당 문의글에 대한 답변 조회
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT a.*, u.nickname AS answerer
                 FROM answers a
                 JOIN users u ON a.user_id = u.id
-                WHERE a.inquiry_id = %s
-            """, (inquiry_id,))
+                WHERE a.inquiry_id = {inquiry_id}
+            """)
             answers = cursor.fetchall()
 
             # 답변이 이미 있다면 답변 수정 폼을 띄우고, 새 답변을 추가하지 않음
@@ -315,16 +301,16 @@ def inquiry_detail(inquiry_id):
 
                 # 답변 등록 또는 수정
                 if not answer_id:  # 새로운 답변 등록
-                    cursor.execute("""
+                    cursor.execute(f"""
                         INSERT INTO answers (inquiry_id, user_id, content)
-                        VALUES (%s, %s, %s)
-                    """, (inquiry_id, session["user_id"], answer_content))
+                        VALUES ({inquiry_id}, {session["user_id"]}, '{answer_content}')
+                    """)
                 else:  # 기존 답변 수정
-                    cursor.execute("""
+                    cursor.execute(f"""
                         UPDATE answers 
-                        SET content = %s, updated_at = NOW() 
-                        WHERE id = %s
-                    """, (answer_content, answer_id))
+                        SET content = '{answer_content}', updated_at = NOW() 
+                        WHERE id = {answer_id}
+                    """)
 
                 conn.commit()
                 
@@ -362,15 +348,13 @@ def add_answer(inquiry_id):
     try:
         with conn.cursor() as cur:
             # 답변을 answers 테이블에 저장
-            cur.execute("""
+            cur.execute(f"""
                 INSERT INTO answers (inquiry_id, user_id, content)
-                VALUES (%s, %s, %s)
-            """, (inquiry_id, session["user_id"], content))
+                VALUES ({inquiry_id}, {session["user_id"]}, '{content}')
+            """)
             conn.commit()
             
     finally:
         conn.close()
 
     return redirect(url_for("contact_bp.inquiry_detail", inquiry_id=inquiry_id))
-
-

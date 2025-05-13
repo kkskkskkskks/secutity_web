@@ -65,10 +65,10 @@ def register():
         conn = current_app.get_db_connection()
         try:
             with conn.cursor() as cursor:
-                cursor.execute("""
+                cursor.execute(f"""
                     INSERT INTO users (email, password, nickname, phone, role_id)
-                    VALUES (%s, %s, %s, %s, %s)
-                """, (email, hashed_pw, nickname, phone, 2))  # ← role_id = 2 (일반 사용자)
+                    VALUES ('{email}', '{hashed_pw}', '{nickname}', '{phone}', 2)
+                """)
             conn.commit()
             return redirect(url_for("main_bp.index"))
 

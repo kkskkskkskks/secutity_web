@@ -23,10 +23,7 @@ def checkout():
         total_price = 0
         with conn.cursor(dictionary=True) as cursor:
             for item in cart:
-                cursor.execute(
-                    "SELECT * FROM products WHERE id = %s",
-                    (item["product_id"],)
-                )
+                cursor.execute(f"SELECT * FROM products WHERE id = {item['product_id']}")
                 product = cursor.fetchone()
                 if product:
                     qty = int(item["quantity"])
@@ -47,18 +44,14 @@ def checkout():
 
             with conn.cursor() as cur:
                 # 주문 저장
-                cur.execute(
-                    "INSERT INTO orders (user_id, address, payment_method, total_amount) VALUES (%s, %s, %s, %s)",
-                    (user_id, address, payment_method, total_price)
-                )
+                sql = f"INSERT INTO orders (user_id, address, payment_method, total_amount) VALUES ({user_id}, '{address}', '{payment_method}', {total_price})"
+                cur.execute(sql)
                 order_id = cur.lastrowid
 
                 # 주문 상세 저장 - ✅ 단가만 저장
                 for p in products:
-                    cur.execute(
-                        "INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES (%s, %s, %s, %s)",
-                        (order_id, p["id"], p["quantity"], p["price"])
-                    )
+                    sql = f"INSERT INTO order_items (order_id, product_id, quantity, unit_price) VALUES ({order_id}, {p['id']}, {p['quantity']}, {p['price']})"
+                    cur.execute(sql)
 
             conn.commit()
             session.pop("cart", None)
@@ -78,16 +71,16 @@ def checkout_complete(order_id):
     try:
         with conn.cursor(dictionary=True) as cursor:
             # 주문 정보
-            cursor.execute("SELECT * FROM orders WHERE id = %s", (order_id,))
+            cursor.execute(f"SELECT * FROM orders WHERE id = {order_id}")
             order = cursor.fetchone()
 
             # 주문 상세 항목
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT oi.*, p.name
                 FROM order_items oi
                 JOIN products p ON oi.product_id = p.id
-                WHERE oi.order_id = %s
-            """, (order_id,))
+                WHERE oi.order_id = {order_id}
+            """)
             items = cursor.fetchall()
 
             # ✅ 총합 다시 계산 (단가 * 수량)

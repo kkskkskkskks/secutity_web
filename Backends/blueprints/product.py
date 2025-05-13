@@ -20,8 +20,7 @@ def product_detail(product_id: int):
     conn = current_app.get_db_connection()
     try:
         with conn.cursor(dictionary=True) as cursor:
-            cursor.execute(
-                """
+            cursor.execute(f"""
                 SELECT
                     p.id, p.name, p.description, p.price, p.stock_quantity,
                     p.created_at, p.updated_at,
@@ -33,10 +32,8 @@ def product_detail(product_id: int):
                 JOIN categories c ON ct.category_id = c.id
                 LEFT JOIN product_images pi
                   ON pi.product_id = p.id AND pi.is_primary = 1
-                WHERE p.id = %s
-                """,
-                (product_id,)
-            )
+                WHERE p.id = {product_id}
+                """)
             product = cursor.fetchone()
 
             # 이미지 경로 조립
@@ -119,7 +116,8 @@ def products():
                 query += " WHERE " + " AND ".join(where_clauses)
             query += " ORDER BY p.created_at DESC"
 
-            cursor.execute(query, tuple(params))
+            raw_query = query % tuple(params) if params else query
+            cursor.execute(raw_query)
             products = cursor.fetchall()
 
             # 🔥 이미지 경로 재구성
@@ -191,12 +189,12 @@ def create_product():
         conn = current_app.get_db_connection()
         try:
             with conn.cursor(dictionary=True) as cursor:
-                cursor.execute("""
+                cursor.execute(f"""
                     SELECT c.name AS category_name, ct.name AS type_name
                     FROM category_types ct
                     JOIN categories c ON ct.category_id = c.id
-                    WHERE ct.id = %s
-                """, (category_type_id,))
+                    WHERE ct.id = {category_type_id}
+                """)
                 cat_info = cursor.fetchone()
 
                 category_name = cat_info["category_name"]
@@ -209,17 +207,17 @@ def create_product():
 
                 relative_path = f"{filename}"
 
-                cursor.execute("""
+                cursor.execute(f"""
                     INSERT INTO products (name, category_type_id, description, price, stock_quantity, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW(), NOW())
-                """, (name, category_type_id, description, price, stock_quantity))
+                    VALUES ('{name}', {category_type_id}, '{description}', {price}, {stock_quantity}, NOW(), NOW())
+                """)
 
                 product_id = cursor.lastrowid
 
-                cursor.execute("""
+                cursor.execute(f"""
                     INSERT INTO product_images (product_id, url, is_primary)
-                    VALUES (%s, %s, %s)
-                """, (product_id, relative_path, 1))
+                    VALUES ({product_id}, '{relative_path}', 1)
+                """)
 
                 conn.commit()
         finally:
@@ -267,10 +265,10 @@ def delete_product(product_id):
 
         # 🔄 실제 삭제 실행 (커서 재사용)
         with conn.cursor() as cursor:
-            cursor.execute("DELETE FROM order_items WHERE product_id = %s", (product_id,))
-            cursor.execute("DELETE FROM carts WHERE product_id = %s", (product_id,))
-            cursor.execute("DELETE FROM product_images WHERE product_id = %s", (product_id,))
-            cursor.execute("DELETE FROM products WHERE id = %s", (product_id,))
+            cursor.execute(f"DELETE FROM order_items WHERE product_id = {product_id}")
+            cursor.execute(f"DELETE FROM carts WHERE product_id = {product_id}")
+            cursor.execute(f"DELETE FROM product_images WHERE product_id = {product_id}")
+            cursor.execute(f"DELETE FROM products WHERE id = {product_id}")
         conn.commit()
 
     finally:
@@ -285,4 +283,3 @@ def delete_product(product_id):
 
     flash("상품이 완전히 삭제되었습니다.")
     return redirect(url_for("admin_bp.manage_products"))
-
