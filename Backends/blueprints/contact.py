@@ -34,21 +34,36 @@ contact_bp = Blueprint("contact_bp", __name__)
 @contact_bp.route("/contact", endpoint="contact")
 def contact():
     board_type = request.args.get("type", "QNA")
+    page = int(request.args.get("page", 1))  # 현재 페이지
+    per_page = 10
+    offset = (page - 1) * per_page
+
     conn = current_app.get_db_connection()
     try:
         with conn.cursor(dictionary=True) as cursor:
-            cursor.execute(f"""
-                SELECT i.*, u.nickname
+            # 총 글 수 구하기
+            cursor.execute("SELECT COUNT(*) AS count FROM inquiries WHERE type = %s", (board_type,))
+            total = cursor.fetchone()["count"]
+            total_pages = (total + per_page - 1) // per_page  # 전체 페이지 수
+
+            # 현재 페이지 글만 가져오기
+            cursor.execute("""
+                SELECT i.id, i.title, i.created_at, u.nickname
                 FROM inquiries i
                 JOIN users u ON i.user_id = u.id
-                WHERE i.type = '{board_type}'
+                WHERE i.type = %s
                 ORDER BY i.created_at DESC
-            """)
+                LIMIT %s OFFSET %s
+            """, (board_type, per_page, offset))
             posts = cursor.fetchall()
     finally:
         conn.close()
 
-    return render_template("contact/contact.html", board_type=board_type, posts=posts)
+    return render_template("contact/contact.html",
+                           posts=posts,
+                           board_type=board_type,
+                           page=page,
+                           total_pages=total_pages)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
