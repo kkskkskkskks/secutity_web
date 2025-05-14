@@ -126,6 +126,19 @@
           </form>
         </div>
       {% endif %}
+
+        <!-- 페이지네이션 -->
+        {% if total_pages > 1 %}
+        <div style="text-align:center; margin-top: 30px;">
+          {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+              <strong style="margin: 0 5px;">{{ p }}</strong>
+            {% else %}
+              <a href="{{ url_for('contact_bp.contact', type=board_type, page=p) }}" style="margin: 0 5px;">{{ p }}</a>
+            {% endif %}
+          {% endfor %}
+        </div>
+        {% endif %}
     </div>
   </div>
 </body>
